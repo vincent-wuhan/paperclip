@@ -1,0 +1,23 @@
+# Tasks: sync-and-local-deploy-paperclip
+
+## 1. 代码同步（code-sync）
+
+- [x] 1.1 备份数据库：`pnpm db:backup`（embedded PG 运行中执行，验证备份文件生成）
+- [ ] 1.2 提交未提交改动：`logger.ts`（secrets 路由日志脱敏）与 `local-encrypted-provider.ts`（master key 路径 ~ 展开）commit 到工作分支；`.runbook/`、`skills/` 未跟踪目录单独 commit（本地运维脚本，保留跟踪）
+- [ ] 1.3 添加 remotes：`upstream` = https://github.com/vincent-wuhan/paperclip.git（fetch 源），`gitcode` = https://gitcode.com/glorius/paperclip.git（push 备份），fetch upstream 最新代码
+- [ ] 1.4 受控停服（`pnpm dev:stop`），将 upstream/master 合并到 `yueming/v2026.820` 工作分支（预期仅 `.agents/skills/paperclip-page/` 4 个文件，无冲突）
+- [ ] 1.5 更新本地 `master` 分支指针到 upstream/master（fast-forward）；验证 pnpm-lock.yaml 无变化则跳过 `pnpm install`
+- [ ] 1.6 重启服务（`pnpm dev`）+ 回归：`/api/health` 200、`/api/companies` 返回 3 个 company；`pnpm typecheck` 通过；推送工作分支与 master 到 gitcode 镜像
+
+## 2. 本地部署验证（local-dev-deploy）
+
+- [ ] 2.1 验证运行环境：Node v22 / pnpm 9、`/api/health` 返回 `bootstrapStatus: ready`、server 日志无错误（服务已在运行，验证代替部署）
+- [ ] 2.2 验证数据存活：同步重启后既有 3 个 company 的 issue/agent 配置完好，embedded PG 数据目录未被重置
+
+## 3. 协同流程配置（dual-harness-collaboration）
+
+- [ ] 3.1 清理 Pilot company 停滞 issue：批量关闭 blocked/todo 态的历史 PAP issue（PAP-1xx 系列），活跃列表只留新试点
+- [ ] 3.2 审视并修订 Codex Planner / Codex Reviewer agent 配置：计划产物含验收标准模板；验收 comment 必须逐条核对执行者声明（check 闭环）
+- [ ] 3.3 审视并修订 Claude Executor agent 配置：完成 comment 格式（改动摘要 + 自测证据）
+- [ ] 3.4 落地流转约定文档：四步流转（计划→认领→完成报告→验收/打回）写入 Pilot company 工作区，作为 agents 共同约定
+- [ ] 3.5 端到端试点：创建一个试点 issue，走完 Codex 计划 → Claude 执行 → Codex 验收全流程，验证相互映证闭环；确认其他 company 不受影响
