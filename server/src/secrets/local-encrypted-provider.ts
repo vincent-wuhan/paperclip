@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { resolveDefaultSecretsKeyFilePath } from "../home-paths.js";
+import { expandHomePrefix, resolveDefaultSecretsKeyFilePath } from "../home-paths.js";
 import type {
   PreparedSecretVersion,
   SecretProviderHealthCheck,
@@ -20,7 +20,7 @@ interface LocalEncryptedMaterial extends StoredSecretVersionMaterial {
 
 function resolveMasterKeyFilePath() {
   const fromEnv = process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
-  if (fromEnv && fromEnv.trim().length > 0) return path.resolve(fromEnv.trim());
+  if (fromEnv && fromEnv.trim().length > 0) return path.resolve(expandHomePrefix(fromEnv.trim()));
   return resolveDefaultSecretsKeyFilePath();
 }
 

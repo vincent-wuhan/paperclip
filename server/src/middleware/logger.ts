@@ -23,6 +23,15 @@ fs.mkdirSync(logDir, { recursive: true });
 
 const logFile = path.join(logDir, "server.log");
 
+function redactRequestBody(req: unknown, body: unknown): unknown {
+  const routePath = (req as { route?: { path?: string } }).route?.path ?? "";
+  const requestPath = (req as { path?: string }).path ?? "";
+  const isSecretRoute = /(^|\/)secrets(\/|$)|secret-(proposals|provider-configs)/.test(
+    `${routePath} ${requestPath}`,
+  );
+  return isSecretRoute ? "[REDACTED]" : redactSensitive(body);
+}
+
 const sharedOpts = {
   translateTime: "SYS:HH:MM:ss",
   ignore: "pid,hostname",
@@ -71,7 +80,7 @@ export const httpLogger = pinoHttp({
       if (ctx) {
         return {
           errorContext: ctx.error,
-          reqBody: redactSensitive(ctx.reqBody),
+          reqBody: redactRequestBody(_req, ctx.reqBody),
           reqParams: redactSensitive(ctx.reqParams),
           reqQuery: redactSensitive(ctx.reqQuery),
         };
@@ -79,7 +88,7 @@ export const httpLogger = pinoHttp({
       const props: Record<string, unknown> = {};
       const { body, params, query } = req as any;
       if (body && typeof body === "object" && Object.keys(body).length > 0) {
-        props.reqBody = redactSensitive(body);
+        props.reqBody = redactRequestBody(req, body);
       }
       if (params && typeof params === "object" && Object.keys(params).length > 0) {
         props.reqParams = redactSensitive(params);
