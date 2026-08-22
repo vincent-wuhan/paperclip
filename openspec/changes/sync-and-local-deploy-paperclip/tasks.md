@@ -20,4 +20,4 @@
 - [x] 3.2 审视并修订 Codex Planner / Codex Reviewer agent 配置：计划产物含验收标准模板（新增"验收标准必须客观可核对"规则）；验收 comment 必须逐条核对执行者声明（新增 Cross-Check 相互映证表格规范）
 - [x] 3.3 审视并修订 Claude Executor agent 配置：完成 comment 格式新增强制 Self-test evidence（命令 + 真实输出）
 - [x] 3.4 落地流转约定文档：四步流转（计划→认领→完成报告→验收/打回）+ 相互映证要求，以 PAP-112 issue 形式发布在 Pilot company
-- [ ] 3.5 端到端试点：创建一个试点 issue，走完 Codex 计划 → Claude 执行 → Codex 验收全流程，验证相互映证闭环；确认其他 company 不受影响
+- [x] 3.5 端到端试点：PAP-113（[PILOT] Add README index to .runbook/）走完 Codex 计划（含可核对验收标准）→ Claude 执行（含自测证据）→ Codex 验收（Cross-Check 表逐条核对 6/6 声明，verdict approve）全流程，相互映证闭环验证；其他 company 不受影响（Fund Observatory/镜舟传媒 issue 状态未变）
