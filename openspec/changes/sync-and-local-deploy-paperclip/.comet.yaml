@@ -4,8 +4,8 @@ context_compression: off
 build_mode: executing-plans
 build_pause: null
 subagent_dispatch: null
-tdd_mode: null
-review_mode: null
+tdd_mode: direct
+review_mode: standard
 isolation: branch
 verify_mode: null
 auto_transition: true
