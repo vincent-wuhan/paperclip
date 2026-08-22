@@ -56,6 +56,11 @@ canonical_spec: openspec
 
 流转约定文档落在 Pilot company 的工作区内，作为两个 agent 共同的约定来源。
 
+## Implementation Divergence
+
+- **merge → rebase**（SUGGESTION 级，已接受）：本文档与 delta spec 原表述为 `git merge upstream/master`。实际执行时用户指示改为 **rebase 到 upstream/master**（全量 243 commits，非原预期的 1 commit；用户在 build 阶段中段明确指示"先 rebase 到 github 真源的版本，再执行迁移"）。rebase 结果：零冲突、历史线性、本地 3 个 commit 干净落在 upstream 之上。tasks.md 1.4 已如实记录。连带影响：同步面从 1 commit 扩大为 243 commits，触发 `pnpm install`（lock 大改）与 15 个 pending migration 的应用——这些步骤均在原设计的"验证 pnpm-lock.yaml 无变化后跳过"分支内自然覆盖。
+- **停服方式**：原设计 `pnpm dev:stop`；实际因 launchd KeepAlive 服务（com.paperclip.fundobservatory）自动重生进程，改为 `launchctl bootout` 卸载后 kill 进程树。收尾时该 launchd 服务保持卸载状态，服务由手动 `pnpm dev` 运行。
+
 ## 错误处理
 
 | 故障 | 对策 |
