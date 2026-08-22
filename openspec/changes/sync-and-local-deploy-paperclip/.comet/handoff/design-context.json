@@ -1,0 +1,16 @@
+{
+  "change": "sync-and-local-deploy-paperclip",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "9e30ba36757649ecbf34718ad19ae7fc0ae1910ff9c323f0b84b0f39310cc85f",
+  "files": [
+    { "path": "openspec/changes/sync-and-local-deploy-paperclip/proposal.md", "sha256": "c57a67ea9e63e544330fef1feb38caa118b18c2510c223839baee86384a729a5" },
+    { "path": "openspec/changes/sync-and-local-deploy-paperclip/design.md", "sha256": "f1e01d290f977b4392ba4e7fe1a50dbadaeb9bc31bfccb2c75df651a371473be" },
+    { "path": "openspec/changes/sync-and-local-deploy-paperclip/tasks.md", "sha256": "6a1d8bcc46ac3111a6cfdfd9b30013ab79e1d1005a0a1f203ac446c6988a447e" },
+    { "path": "openspec/changes/sync-and-local-deploy-paperclip/specs/code-sync/spec.md", "sha256": "3983c1f19c3b05295f7018ff9e22683f5f273ef5fdde28107711a1916c800843" },
+    { "path": "openspec/changes/sync-and-local-deploy-paperclip/specs/dual-harness-collaboration/spec.md", "sha256": "7f1f56f959fddcd4b2fc5042601b72c4adc407e7d29ab9c985363d919dcc835d" },
+    { "path": "openspec/changes/sync-and-local-deploy-paperclip/specs/local-dev-deploy/spec.md", "sha256": "93c9a3043b5474b9b51bffa9734450279174619fa6b6f907db7bab4efea55f3a" }
+  ]
+}
