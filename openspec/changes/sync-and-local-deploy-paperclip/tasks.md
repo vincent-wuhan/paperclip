@@ -16,8 +16,8 @@
 
 ## 3. 协同流程配置（dual-harness-collaboration）
 
-- [ ] 3.1 清理 Pilot company 停滞 issue：批量关闭 blocked/todo 态的历史 PAP issue（PAP-1xx 系列），活跃列表只留新试点
-- [ ] 3.2 审视并修订 Codex Planner / Codex Reviewer agent 配置：计划产物含验收标准模板；验收 comment 必须逐条核对执行者声明（check 闭环）
-- [ ] 3.3 审视并修订 Claude Executor agent 配置：完成 comment 格式（改动摘要 + 自测证据）
-- [ ] 3.4 落地流转约定文档：四步流转（计划→认领→完成报告→验收/打回）写入 Pilot company 工作区，作为 agents 共同约定
+- [x] 3.1 清理 Pilot company 停滞 issue：批量关闭 blocked/todo 态的历史 PAP issue（PAP-1xx 系列），活跃列表只留新试点（111 个全部 cancelled）
+- [x] 3.2 审视并修订 Codex Planner / Codex Reviewer agent 配置：计划产物含验收标准模板（新增"验收标准必须客观可核对"规则）；验收 comment 必须逐条核对执行者声明（新增 Cross-Check 相互映证表格规范）
+- [x] 3.3 审视并修订 Claude Executor agent 配置：完成 comment 格式新增强制 Self-test evidence（命令 + 真实输出）
+- [x] 3.4 落地流转约定文档：四步流转（计划→认领→完成报告→验收/打回）+ 相互映证要求，以 PAP-112 issue 形式发布在 Pilot company
 - [ ] 3.5 端到端试点：创建一个试点 issue，走完 Codex 计划 → Claude 执行 → Codex 验收全流程，验证相互映证闭环；确认其他 company 不受影响
