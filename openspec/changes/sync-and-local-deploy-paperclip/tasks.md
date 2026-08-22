@@ -3,16 +3,16 @@
 ## 1. 代码同步（code-sync）
 
 - [x] 1.1 备份数据库：`pnpm db:backup`（embedded PG 运行中执行，验证备份文件生成）
-- [ ] 1.2 提交未提交改动：`logger.ts`（secrets 路由日志脱敏）与 `local-encrypted-provider.ts`（master key 路径 ~ 展开）commit 到工作分支；`.runbook/`、`skills/` 未跟踪目录单独 commit（本地运维脚本，保留跟踪）
-- [ ] 1.3 添加 remotes：`upstream` = https://github.com/vincent-wuhan/paperclip.git（fetch 源），`gitcode` = https://gitcode.com/glorius/paperclip.git（push 备份），fetch upstream 最新代码
-- [ ] 1.4 受控停服（`pnpm dev:stop`），将 upstream/master 合并到 `yueming/v2026.820` 工作分支（预期仅 `.agents/skills/paperclip-page/` 4 个文件，无冲突）
-- [ ] 1.5 更新本地 `master` 分支指针到 upstream/master（fast-forward）；验证 pnpm-lock.yaml 无变化则跳过 `pnpm install`
-- [ ] 1.6 重启服务（`pnpm dev`）+ 回归：`/api/health` 200、`/api/companies` 返回 3 个 company；`pnpm typecheck` 通过；推送工作分支与 master 到 gitcode 镜像
+- [x] 1.2 提交未提交改动：`logger.ts`（secrets 路由日志脱敏）与 `local-encrypted-provider.ts`（master key 路径 ~ 展开）commit 到工作分支；`.runbook/`、`skills/` 未跟踪目录单独 commit（本地运维脚本，保留跟踪）
+- [x] 1.3 添加 remotes：`upstream` = https://github.com/vincent-wuhan/paperclip.git（fetch 源），`gitcode` = https://gitcode.com/glorius/paperclip.git（push 备份），fetch upstream 最新代码
+- [x] 1.4 受控停服（卸载 launchd KeepAlive 任务后 kill 进程树），将工作分支 **rebase** 到 upstream/master（全量 243 commits，fd106c6fa；零冲突，修复 1 处上游签名变化）
+- [x] 1.5 更新本地 `master` 分支指针到 upstream/master（fast-forward）；`pnpm install`（lock 大改）+ `db migrate`（15 个 pending migrations 应用）
+- [x] 1.6 重启服务（`pnpm dev`）+ 回归：`/api/health` 200、`/api/companies` 返回 3 个 company；`pnpm typecheck` 通过；推送工作分支与 master 到 gitcode 镜像
 
 ## 2. 本地部署验证（local-dev-deploy）
 
-- [ ] 2.1 验证运行环境：Node v22 / pnpm 9、`/api/health` 返回 `bootstrapStatus: ready`、server 日志无错误（服务已在运行，验证代替部署）
-- [ ] 2.2 验证数据存活：同步重启后既有 3 个 company 的 issue/agent 配置完好，embedded PG 数据目录未被重置
+- [x] 2.1 验证运行环境：Node v22 / pnpm 9、`/api/health` 返回 `bootstrapStatus: ready`、server 日志无错误（服务已在运行，验证代替部署）
+- [x] 2.2 验证数据存活：同步重启后既有 3 个 company 的 issue/agent 配置完好，embedded PG 数据目录未被重置
 
 ## 3. 协同流程配置（dual-harness-collaboration）
 
