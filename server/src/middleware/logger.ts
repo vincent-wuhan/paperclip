@@ -80,7 +80,7 @@ export const httpLogger = pinoHttp({
       if (ctx) {
         return {
           errorContext: ctx.error,
-          reqBody: redactRequestBody(_req, ctx.reqBody),
+          reqBody: redactRequestBody(req, ctx.reqBody),
           reqParams: redactSensitive(ctx.reqParams),
           reqQuery: redactSensitive(ctx.reqQuery),
         };
