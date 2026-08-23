@@ -2,6 +2,8 @@
 comet_change: sync-and-local-deploy-paperclip
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-08-23-sync-and-local-deploy-paperclip
+status: final
 ---
 
 # Design Doc: sync-and-local-deploy-paperclip
