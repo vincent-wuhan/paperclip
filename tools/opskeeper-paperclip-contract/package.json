@@ -1,0 +1,21 @@
+{
+  "name": "opskeeper-paperclip-connector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fake OpsKeeper contract server and failure-path test suite",
+  "phase": "contract",
+  "type": "module",
+  "scripts": {
+    "contract:fake": "tsx tests/contract/fake_opskeeper.ts --port 4117",
+    "test": "node --import tsx --test tests/contract/cases/*.spec.ts",
+    "test:failure": "node --import tsx --test --test-name-pattern='5xx|timeout|401|403|409|stale|conflict' tests/contract/cases/*.spec.ts",
+    "lint:capabilities": "bash tests/contract/scripts/lint-capabilities.sh",
+    "lint:secrets": "bash tests/contract/scripts/lint-secrets.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "tsx": "4.19.0"
+  }
+}
