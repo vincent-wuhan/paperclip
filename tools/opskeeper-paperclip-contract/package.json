@@ -13,7 +13,7 @@
     "lint:secrets": "bash tests/contract/scripts/lint-secrets.sh"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24.11.0"
   },
   "devDependencies": {
     "tsx": "4.19.0"
