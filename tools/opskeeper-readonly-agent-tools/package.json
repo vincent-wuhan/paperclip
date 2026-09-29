@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Phase C read-only Agent tools for Paperclip × OpsKeeper (task 3.7).",
   "private": true,
+  "engines": {
+    "node": ">=24.11.0"
+  },
   "type": "module",
   "scripts": {
     "test": "node --import tsx --test tests/*.test.ts",
