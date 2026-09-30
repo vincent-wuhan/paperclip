@@ -1,0 +1,100 @@
+{
+  "change": "opskeeper-paperclip-feasibility",
+  "phase": "S1",
+  "pinned_at": "2026-09-28T07:25:00Z",
+  "repositories": {
+    "paperclip": {
+      "name": "paperclip",
+      "role": "plugin-host",
+      "commit": "0f14d261233c545aa6a8a38ec253c498a5130fff",
+      "branch": "master",
+      "url": "https://github.com/vincent-wuhan/paperclip.git",
+      "pin_policy": "patch-only",
+      "status": "pinned",
+      "verified_by": "git rev-parse HEAD && git describe --tags --exact-match"
+    },
+    "opskeeper": {
+      "name": "opskeeper",
+      "role": "authority-source",
+      "commit": "8774f7b3576bbde9f41a4dab3941f76ca51f1b9e",
+      "branch": "main",
+      "tag": "release/2026.09.0",
+      "pin_policy": "frozen-readonly",
+      "status": "read-only-anchor",
+      "verified_by": "git rev-parse HEAD",
+      "notes": "opskeeper is the authority; we only read its public API. No code imports from opskeeper beyond the contract boundary."
+    }
+  },
+  "api_surface_first_batch": {
+    "purpose": "minimal first-batch surface for Phase A read-only sync; see docs/api-surface.md",
+    "manifest": {
+      "capabilities": [
+        "plugin.manifest",
+        "plugin.validator"
+      ],
+      "schema_version": "1.0.0",
+      "blacklist": [
+        "execute-*",
+        "shell-*",
+        "write-mcp-*",
+        "cross-resource-*",
+        "mutate-*"
+      ]
+    },
+    "validator": {
+      "endpoint": "plugin/validate",
+      "purpose": "manifest schema gate at install time",
+      "permission": "read-only"
+    },
+    "webhook": {
+      "endpoint": "plugin/events",
+      "purpose": "opskeeper event delivery to paperclip",
+      "direction": "opskeeper -> paperclip",
+      "permission": "ingest-only",
+      "auth": "shared_hmac_secret_per_channel"
+    },
+    "approval_bridge": {
+      "endpoint": "plugin/approvals/callback",
+      "purpose": "Phase B placeholder; disabled by default in the contract suite",
+      "enabled": false,
+      "permission": "approval-only"
+    }
+  },
+  "service_account": {
+    "design_doc": "docs/service-account.md",
+    "scopes": ["ok-readonly", "ok-approval"],
+    "rotation": {
+      "ok-readonly": "30d",
+      "ok-approval": "7d"
+    },
+    "admin_forbidden": true,
+    "audit_checklist": "docs/audit-checklist.md"
+  },
+  "fake_contract_server": {
+    "entry": "tests/contract/fake_opskeeper.ts",
+    "endpoint_matrix": [
+      {"method": "GET",  "path": "/api/v1/incidents",          "scope": "ok-readonly"},
+      {"method": "GET",  "path": "/api/v1/incidents/:id",      "scope": "ok-readonly"},
+      {"method": "POST", "path": "/api/v1/incidents/:id/archive","scope": "ok-readonly"},
+      {"method": "POST", "path": "/api/v1/approvals",          "scope": "ok-approval"},
+      {"method": "GET",  "path": "/api/v1/approvals/:id",      "scope": "ok-approval"}
+    ],
+    "failure_paths_covered": [
+      "normal",
+      "server-error-5xx",
+      "timeout",
+      "auth-401",
+      "auth-403",
+      "idempotent-conflict-409"
+    ]
+  },
+  "guards": {
+    "no_admin_credentials": true,
+    "no_unauthorized_capabilities": true,
+    "approve_bridge_default_off": true
+  },
+  "signoff": {
+    "by": "OpsKeeper connector integration",
+    "timestamp": "2026-09-28T07:25:00Z"
+  }
+}
