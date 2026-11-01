@@ -261,6 +261,7 @@ paperclip 侧（插件）：
 | social-auto-upload（playwright 多平台上传） | 出口执行层：封装为出口 agent 的 skill；登录态管理参考 pw-profile 模式 |
 | MoneyPrinterPlus（AI 批量短视频生成） | 生产层：批量生成管线（选题→文案→TTS→素材→合成）的参考实现 |
 | MatrixMedia 类矩阵分发 | 平台差异适配层（各平台标题/封面/标签规格）参考 |
+| Gamex/OhMyGame（canvas 创作 + agent 驱动） | **内容 IP 创作工作台**（Phase C+ 试点，剧情/角色型选题线用）：canvas 节点互引=素材复用、JSON schema 项目可被生产层 agent 编程驱动、remote-desktop-runtime 与 browser-local 出口同构。**不用于批量合成管线**（无时间线/无 headless API/beta） |
 
 这些工具都停在"生产+发布自动化"，无一做审批风控、决策账本、账号治理——运营治理层正是本架构补的空白，故作参考实现而非直接采用。
 
