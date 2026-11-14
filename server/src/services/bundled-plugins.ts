@@ -119,6 +119,30 @@ export const BUNDLED_PLUGIN_CATALOG: readonly BundledPluginCatalogEntry[] = [
  */
 export const SELF_HOSTED_AUTO_INSTALL_KEYS: readonly string[] = ["kubernetes"];
 
+/**
+ * Env var that extends the self-hosted auto-install key list (desktop builds).
+ * Comma-separated keys; entries resolve through the distribution catalog
+ * (`<bundled root>/distribution/catalog.json`), so the desktop image ships
+ * each plugin bundle plus a digest-verified catalog entry. Managed instances
+ * ignore this variable: their keys come from the managed config document.
+ */
+export const DESKTOP_AUTO_INSTALL_KEYS_ENV_VAR = "PAPERCLIP_DESKTOP_AUTO_INSTALL_KEYS";
+
+/**
+ * Self-hosted auto-install keys for the given environment. With no
+ * `PAPERCLIP_DESKTOP_AUTO_INSTALL_KEYS` set this is exactly
+ * `SELF_HOSTED_AUTO_INSTALL_KEYS`; when set, the desktop keys are appended
+ * (deduplicated) after the built-ins.
+ */
+export function resolveSelfHostedAutoInstallKeys(
+  env: Record<string, string | undefined> = process.env,
+): readonly string[] {
+  const raw = env[DESKTOP_AUTO_INSTALL_KEYS_ENV_VAR];
+  if (!raw?.trim()) return SELF_HOSTED_AUTO_INSTALL_KEYS;
+  const desktopKeys = raw.split(",").map((key) => key.trim()).filter(Boolean);
+  return [...new Set([...SELF_HOSTED_AUTO_INSTALL_KEYS, ...desktopKeys])];
+}
+
 export function resolveManagedBundledPluginKeys(
   keys: readonly string[] | null | undefined,
   env: Record<string, string | undefined> = process.env,

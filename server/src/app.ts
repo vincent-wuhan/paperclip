@@ -188,12 +188,12 @@ import {
   type PluginLoader,
 } from "./services/plugin-loader.js";
 import {
-  SELF_HOSTED_AUTO_INSTALL_KEYS,
   BUNDLED_PLUGIN_CATALOG,
   ensureBundledPlugins,
   resolveBundledCatalogRoot,
   resolveBundledPluginInstalls,
   resolveManagedBundledPluginKeys,
+  resolveSelfHostedAutoInstallKeys,
 } from "./services/bundled-plugins.js";
 import { createBundledPluginPackageResolver } from "./services/bundled-plugin-package.js";
 import { readDistributionPluginCatalog, distributionPluginActivationGuard } from "./services/distribution-plugin-catalog.js";
@@ -647,7 +647,7 @@ export async function createApp(
     opts.bundledPluginCatalogRoot ?? resolveBundledCatalogRoot(process.env);
   const distributionPlugins = readDistributionPluginCatalog(bundledCatalogRoot, BUNDLED_PLUGIN_CATALOG);
   const bundledPluginInstalls = resolveBundledPluginInstalls(
-    managedAutoInstallKeys ?? SELF_HOSTED_AUTO_INSTALL_KEYS,
+    managedAutoInstallKeys ?? resolveSelfHostedAutoInstallKeys(process.env),
     {
       catalogRoot: bundledCatalogRoot,
       env: process.env,
