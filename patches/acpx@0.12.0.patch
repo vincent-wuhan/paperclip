@@ -86,7 +86,25 @@ diff --git a/dist/live-checkpoint-ClPCSdrW.js b/dist/live-checkpoint-ClPCSdrW.js
  			if (!this.options.verbose) return;
  			process.stderr.write(chunk);
  		});
-@@ -3994,7 +4014,7 @@
+@@ -3980,7 +4000,16 @@
+ 		});
+ 	}
+ 	async resolveAgentLaunchPlan() {
+-		const configuredCommand = splitCommandLine(this.options.agentCommand);
++		let configuredCommand;
++		const rawCmd = typeof (this.options && this.options.agentCommand) === "string" ? this.options.agentCommand.trim() : "";
++		if (rawCmd.includes(" ") && !/^["']/.test(rawCmd) && !rawCmd.includes(") && !rawCmd.includes(') && fs.existsSync(rawCmd) && !statSync(rawCmd).isDirectory()) {
++				// An unquoted absolute command path containing spaces (e.g. an app
++				// bundle path like "Benyue Console.app") must not be split on
++				// whitespace when the whole string is an existing executable file.
++				configuredCommand = { command: rawCmd, args: [] };
++		} else {
++				configuredCommand = splitCommandLine(this.options.agentCommand);
++		}
+ 		const resolvedBuiltInLaunch = resolveBuiltInAgentLaunch(this.options.agentCommand);
+ 		const spawnCommand = resolvedBuiltInLaunch?.command ?? configuredCommand.command;
+ 		let args = resolvedBuiltInLaunch?.args ?? configuredCommand.args;
+@@ -3994,7 +4023,7 @@
  			geminiAcp: isGeminiAcpCommand(spawnCommand, args),
  			copilotAcp: isCopilotAcpCommand(spawnCommand, args),
  			claudeAcp: isClaudeAcpCommand(spawnCommand, args),
@@ -95,7 +113,7 @@ diff --git a/dist/live-checkpoint-ClPCSdrW.js b/dist/live-checkpoint-ClPCSdrW.js
  		};
  	}
  	logAgentLaunch(plan) {
-@@ -4729,6 +4749,9 @@
+@@ -4729,6 +4758,9 @@
  			return await this.filesystem.readTextFile(params);
  		} catch (error) {
  			this.recordPermissionError(params.sessionId, error);
@@ -105,7 +123,7 @@ diff --git a/dist/live-checkpoint-ClPCSdrW.js b/dist/live-checkpoint-ClPCSdrW.js
  			throw error;
  		}
  	}
-@@ -6070,6 +6093,27 @@
+@@ -6070,6 +6102,27 @@
  //#region src/runtime/engine/prompt-turn.ts
  const SESSION_REPLY_IDLE_MS = 1e3;
  const SESSION_REPLY_DRAIN_TIMEOUT_MS = 5e3;
@@ -133,7 +151,7 @@ diff --git a/dist/live-checkpoint-ClPCSdrW.js b/dist/live-checkpoint-ClPCSdrW.js
  async function runPromptTurn(params) {
  	try {
  		const promptPromise = params.client.prompt(params.sessionId, params.prompt);
-@@ -6079,6 +6123,20 @@
+@@ -6079,6 +6132,20 @@
  			idleMs: SESSION_REPLY_IDLE_MS,
  			timeoutMs: SESSION_REPLY_DRAIN_TIMEOUT_MS
  		}).catch(() => {});
