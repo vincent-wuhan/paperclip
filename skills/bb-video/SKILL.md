@@ -13,20 +13,20 @@ description: >
 
 ## 工具链位置
 
-所有脚本在宿主技能目录（不在本 skill 内复制，避免双份维护）：
+所有脚本在宿主技能目录（不在本 skill 内复制，避免双份维护）。工具链根目录优先取环境变量 `$BB_VIDEO_HOME`，缺省 `~/.claude/skills/bb-video`：
 
-- `~/.claude/skills/bb-video/promo/scripts/new.mjs` — 新建工程
-- `~/.claude/skills/bb-video/promo/scripts/render.mjs <工程> [--force]` — 渲染成片 + srt 字幕
-- `~/.claude/skills/bb-video/explainer/scripts/tts.py` — 重新生成配音与词级时间轴
-- 制片规范：`~/.claude/skills/bb-video/promo/GUIDE.md`
+- `$BB_VIDEO_HOME/promo/scripts/new.mjs` — 新建工程
+- `$BB_VIDEO_HOME/promo/scripts/render.mjs <工程> [--force]` — 渲染成片 + srt 字幕
+- `$BB_VIDEO_HOME/explainer/scripts/tts.py` — 重新生成配音与词级时间轴
+- 制片规范：`$BB_VIDEO_HOME/promo/GUIDE.md`
 
 ## 产线流程
 
-1. **建工程**：`node ~/.claude/skills/bb-video/promo/scripts/new.mjs <name>`。工程含 `index.html`（cue 场景脚本）、`script.json`（逐句旁白文本）、`lib/`、`audio/`。
+1. **建工程**：`node $BB_VIDEO_HOME/promo/scripts/new.mjs <name>`。工程含 `index.html`（cue 场景脚本）、`script.json`（逐句旁白文本）、`lib/`、`audio/`。
 2. **写剧本**：`script.json` 每句一个 id（p1, p2…），文案定稿后再配音，改一句重跑一次 TTS。
-3. **配音**：TTS 必须用 `/Users/yueming/miniforge3/bin/python3`（edge-tts 只装在这支 python）。重生成 `audio/lines/*.mp3` + `timeline.js`（词级时间点，cue 锚定靠它）。
+3. **配音**：TTS 必须用 `$BB_VIDEO_PYTHON`（edge-tts 只装在这支 python；缺省为 `/Users/yueming/miniforge3/bin/python3`，未设且缺省不存在时用 `python3` 并先 `pip install edge-tts`）。重生成 `audio/lines/*.mp3` + `timeline.js`（词级时间点，cue 锚定靠它）。
 4. **写 cue**：`index.html` 里逐场动画，cue 用 `at: ['p8', '从']` 锚定到旁白具体字词。改 cue 不需要重跑 TTS。
-5. **渲染**：`node ~/.claude/skills/bb-video/promo/scripts/render.mjs <工程> --force`，产出 `out/video-16x9.mp4` + `captions-16x9.srt`。
+5. **渲染**：`node $BB_VIDEO_HOME/promo/scripts/render.mjs <工程> --force`，产出 `out/video-16x9.mp4` + `captions-16x9.srt`。
 6. **归档**：`ffmpeg -y -i out/video-16x9.mp4 -c copy -movflags +faststart <归档名>.mp4`（faststart 必做，否则流媒体播放卡）。
 
 ## 硬性纪律
