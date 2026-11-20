@@ -358,7 +358,7 @@ diff --git a/dist/live-checkpoint-BSIrfgVo.js b/dist/live-checkpoint-BSIrfgVo.js
 -		const configuredCommand = resolveAgentCommandParts(this.options.agentCommand, this.options.agentArgv);
 +		let configuredCommand;
 +		const rawCmd = typeof (this.options && this.options.agentCommand) === "string" ? this.options.agentCommand.trim() : "";
-+		if (rawCmd.includes(" ") && !/^["']/.test(rawCmd) && !rawCmd.includes(") && !rawCmd.includes(') && fs.existsSync(rawCmd) && !statSync(rawCmd).isDirectory()) {
++		if (rawCmd.includes(" ") && !/^["']/.test(rawCmd) && !rawCmd.includes('"') && !rawCmd.includes("'") && fs.existsSync(rawCmd) && !statSync(rawCmd).isDirectory()) {
 +				// An unquoted absolute command path containing spaces (e.g. an app
 +				// bundle path like "Benyue Console.app") must not be split on
 +				// whitespace when the whole string is an existing executable file.
