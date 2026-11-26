@@ -12,6 +12,7 @@ import {
   authUsers,
   approvals,
   companies,
+  completionContracts,
   companyMemberships,
   createDb,
   documents,
@@ -20,6 +21,9 @@ import {
   issueComments,
   issueThreadInteractions,
   issues,
+  nativeRunResults,
+  statusDecisions,
+  workAssessments,
 } from "@paperclipai/db";
 import { createFullDatabaseResponseCapture, installDatabaseResponseCapture } from "../../__tests__/helpers/full-database-response-capture.js";
 import { startRecoveryPostgres } from "../../__tests__/helpers/recovery-postgres.js";
@@ -529,6 +533,141 @@ describe("PaperclipRunnerToolAuthority", () => {
     } finally {
       await db.delete(issues).where(inArray(issues.id, [...ids, foreignId]));
       await db.delete(companies).where(eq(companies.id, foreignCompanyId));
+    }
+  });
+
+  it("excludes tasks whose execution lock is held by another run from search_tasks", async () => {
+    const foreignRunId = randomUUID();
+    const ownLockedId = randomUUID();
+    const foreignLockedId = randomUUID();
+    const unlockedId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: foreignRunId, companyId, agentId,
+      status: "running", runtimeMode: "native", nativeIssueId: foreignLockedId,
+      invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId: foreignLockedId } });
+    await db.insert(issues).values([
+      // This run holds the lock itself: an issue-scoped run must still see its own task.
+      { id: ownLockedId, companyId, title: "Execution-lock self-held marker", description: "execution-lock-search", status: "todo", assigneeAgentId: agentId, executionRunId: runId },
+      // Another run holds the lock: the task is in progress elsewhere and must not be offered.
+      { id: foreignLockedId, companyId, title: "Execution-lock foreign marker", description: "execution-lock-search", status: "todo", assigneeAgentId: agentId, executionRunId: foreignRunId },
+      // No lock: available work, must stay visible.
+      { id: unlockedId, companyId, title: "Execution-lock free marker", description: "execution-lock-search", status: "todo" },
+    ]);
+    try {
+      const authority = new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId });
+      const result = await authority.execute({
+        tool: "search_tasks", callId: "execution-lock-search", arguments: { query: "execution-lock-search", limit: 50 },
+      });
+      const ids = (result as { tasks: Array<{ id: string }> }).tasks.map(task => task.id);
+      expect(ids).toContain(unlockedId);
+      expect(ids).toContain(ownLockedId);
+      expect(ids).not.toContain(foreignLockedId);
+      expect(JSON.stringify(result)).not.toContain(foreignLockedId);
+      expect(result).toMatchObject({
+        returnedCount: 2,
+        hasMore: false,
+        filteredByExecutionLock: 1,
+        filteredByExecutionLockNote: expect.stringContaining("other runs"),
+      });
+      // When every match is locked, the counter explains the empty list so the
+      // agent does not mistake occupied work for "no work".
+      const occupiedOnly = await authority.execute({
+        tool: "search_tasks", callId: "execution-lock-occupied", arguments: { query: "Execution-lock foreign marker", limit: 50 },
+      });
+      expect(occupiedOnly).toMatchObject({
+        tasks: [], returnedCount: 0, hasMore: false, nextCursor: null,
+        filteredByExecutionLock: 1,
+      });
+    } finally {
+      await db.delete(issues).where(inArray(issues.id, [ownLockedId, foreignLockedId, unlockedId]));
+      await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id, foreignRunId));
+    }
+  });
+
+  it("keeps task context for the bound task while another run holds its execution lock", async () => {
+    const reviewerAgentId = randomUUID();
+    const workerAgentId = randomUUID();
+    const reviewIssueId = randomUUID();
+    const contractId = randomUUID(), resultId = randomUUID(), assessmentId = randomUUID();
+    const interactionId = randomUUID(), decisionId = randomUUID();
+    const workerRunId = randomUUID(), reviewRunId = randomUUID();
+    await db.insert(agents).values([
+      { id: workerAgentId, companyId, name: "Lock-holding worker", adapterType: "paperclip_runner", adapterConfig: { provider: "codex" }, runtimeConfig: {}, status: "active" },
+      { id: reviewerAgentId, companyId, name: "Lock-read reviewer", adapterType: "paperclip_runner", adapterConfig: { provider: "codex" }, runtimeConfig: {}, status: "active" },
+    ]);
+    await db.insert(issues).values({
+      id: reviewIssueId, companyId, issueNumber: 9001, identifier: "RNT-9001",
+      title: "Reviewed task with an external lock", status: "in_review", workMode: "standard",
+      assigneeAgentId: workerAgentId, lastStatusDecisionId: decisionId,
+    });
+    await db.insert(completionContracts).values({
+      id: contractId, companyId, issueId: reviewIssueId, revision: 1,
+      schemaVersion: "paperclip.completion-contract.v1", policyVersion: "native-review-fixture",
+      risk: "standard", completionAuthority: "server_arbiter", incompleteCriteriaPolicy: "preserve_non_terminal",
+      contractJson: { objective: "Review the work" }, canonicalSha256: contractId,
+      createdByActorType: "system", createdByActorId: "test",
+    });
+    await db.insert(heartbeatRuns).values([
+      // The worker run that produced the reviewed work.
+      { id: workerRunId, companyId, agentId: workerAgentId, status: "succeeded", runtimeMode: "native",
+        nativeIssueId: reviewIssueId, invocationSource: "assignment", triggerDetail: "system",
+        contextSnapshot: { issueId: reviewIssueId }, completionContractId: contractId },
+      // The review run: binding skips the execution-lock join condition, so it
+      // is the one path that reaches get_task_context with a foreign lock.
+      { id: reviewRunId, companyId, agentId: reviewerAgentId, status: "running", runtimeMode: "native",
+        nativeIssueId: reviewIssueId, invocationSource: "assignment", triggerDetail: "system",
+        contextSnapshot: { issueId: reviewIssueId, nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId } },
+    ]);
+    await db.insert(nativeRunResults).values({
+      id: resultId, companyId, issueId: reviewIssueId, runId: workerRunId,
+      completionContractId: contractId, serverFingerprint: resultId, schemaStatus: "accepted",
+      resultJson: {}, canonicalSha256: resultId,
+    });
+    await db.insert(workAssessments).values({
+      id: assessmentId, companyId, issueId: reviewIssueId, runId: workerRunId,
+      contractId, resultId, triggerKind: "native_result", triggerActorCompanyId: companyId,
+      priorIssueStatus: "in_progress", priorStatusVersion: 0, policyVersion: "native-review-fixture",
+      assessmentJson: {}, inputDigest: assessmentId,
+    });
+    await db.insert(statusDecisions).values({
+      id: decisionId, companyId, issueId: reviewIssueId, runId: workerRunId, assessmentId,
+      decisionVersion: 1, policyVersion: "native-review-fixture", fromStatus: "in_progress",
+      toStatus: "in_review", reasonCode: "explicit_review", decisionJson: {},
+      decisionDigest: decisionId, applicationState: "applied",
+    });
+    await db.insert(issueThreadInteractions).values({
+      id: interactionId, companyId, issueId: reviewIssueId, kind: "request_confirmation",
+      status: "accepted", addresseeAgentId: reviewerAgentId, sourceRunId: workerRunId,
+      resolvedByAgentId: reviewerAgentId, resolvedByRunId: reviewRunId, resolvedAt: new Date(),
+      payload: { version: 1, prompt: "Review work", target: { type: "custom", key: "native_completion_review", revisionId: decisionId } },
+    });
+    const reviewAuthority = new PaperclipRunnerToolAuthority(db, {
+      companyId, agentId: reviewerAgentId, issueId: reviewIssueId, runId: reviewRunId,
+      nativeReview: { nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId },
+    });
+    try {
+      // No lock yet: the resolved review may still read its task context.
+      await expect(reviewAuthority.execute({ tool: "get_task_context", callId: "review-unlocked", arguments: {} }))
+        .resolves.toMatchObject({ activeTask: { id: reviewIssueId } });
+      // The worker's own successor run holds the lock: hand out a refusal that
+      // names the conflict instead of the full context that invites rework.
+      await db.update(issues).set({ executionRunId: workerRunId }).where(eq(issues.id, reviewIssueId));
+      await expect(reviewAuthority.execute({ tool: "get_task_context", callId: "review-locked", arguments: {} }))
+        .rejects.toThrow("currently being processed by another run");
+      // An ordinary issue-scoped run reads its own locked task: unchanged.
+      const workerAuthority = new PaperclipRunnerToolAuthority(db, {
+        companyId, agentId: agentId, issueId, runId,
+      });
+      await expect(workerAuthority.execute({ tool: "get_task_context", callId: "own-locked-context", arguments: {} }))
+        .resolves.toMatchObject({ activeTask: { id: issueId, executionRunId: runId } });
+    } finally {
+      await db.delete(issueThreadInteractions).where(eq(issueThreadInteractions.id, interactionId));
+      await db.delete(statusDecisions).where(eq(statusDecisions.id, decisionId));
+      await db.delete(workAssessments).where(eq(workAssessments.id, assessmentId));
+      await db.delete(nativeRunResults).where(eq(nativeRunResults.id, resultId));
+      await db.delete(heartbeatRuns).where(inArray(heartbeatRuns.id, [workerRunId, reviewRunId]));
+      await db.delete(completionContracts).where(eq(completionContracts.id, contractId));
+      await db.delete(issues).where(eq(issues.id, reviewIssueId));
+      await db.delete(agents).where(inArray(agents.id, [workerAgentId, reviewerAgentId]));
     }
   });
 

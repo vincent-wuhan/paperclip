@@ -828,6 +828,13 @@ export class PaperclipRunnerToolAuthority {
         return apiToolResult(await this.#callApi(call.callId, call.arguments));
       }
       case "get_task_context": {
+        // Ordinary runs bind through the execution lock itself, but review runs
+        // skip that join condition. Never hand a full task context to a run
+        // while another run holds the issue's execution lock; otherwise the
+        // agent repeats work that is already in progress elsewhere.
+        if (context.issue.executionRunId && context.issue.executionRunId !== this.binding.runId) {
+          throw forbidden("This task is currently being processed by another run. Do not redo its work; pick a different task with search_tasks.");
+        }
         if (this.#apiScope(context).kind === "skill_test") return {
           company: { id: this.binding.companyId }, actor: redactedActor(context.actor),
           activeTask: redactedTask(context.issue), childTasks: [], childReviewOutcomes: [],
@@ -917,12 +924,17 @@ export class PaperclipRunnerToolAuthority {
           (!query || `${task.identifier} ${task.title} ${task.description ?? ""}`.toLowerCase().includes(query))
           && (!statuses || statuses.size === 0 || statuses.has(task.status))
         );
-        const readable = this.binding.museRuntime ? await this.#readableMuseTaskIds(context.run, matching.map(task => task.id)) : null;
+        // A company-scoped run finds work by scanning this list. Issues whose
+        // execution lock names another run are already being executed, so
+        // advertising them here makes two runs perform the same work.
+        const unlocked = matching.filter((task) => !task.executionRunId || task.executionRunId === this.binding.runId);
+        const filteredByExecutionLock = matching.length - unlocked.length;
+        const readable = this.binding.museRuntime ? await this.#readableMuseTaskIds(context.run, unlocked.map(task => task.id)) : null;
         const limit = boundedLimit(input.limit, 50, 200);
         const cursor = input.cursor === undefined ? null : requiredUuid(input.cursor).toLowerCase();
         // IDs keep page order stable when task activity or status changes. Every
         // page still applies current company, privacy and Muse read authority.
-        const remaining = matching.filter(task => (!readable || readable.has(task.id)) && (!cursor || task.id > cursor))
+        const remaining = unlocked.filter(task => (!readable || readable.has(task.id)) && (!cursor || task.id > cursor))
           .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
         const page = remaining.slice(0, limit);
         const hasMore = remaining.length > limit;
@@ -932,6 +944,10 @@ export class PaperclipRunnerToolAuthority {
           returnedCount: page.length,
           hasMore,
           nextCursor: hasMore ? page[page.length - 1]!.id : null,
+          ...(filteredByExecutionLock > 0 ? {
+            filteredByExecutionLock,
+            filteredByExecutionLockNote: `${filteredByExecutionLock} matching task(s) are being executed by other runs and were excluded from these results.`,
+          } : {}),
         };
       }
       case "list_documents":
