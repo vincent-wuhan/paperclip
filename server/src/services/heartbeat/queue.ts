@@ -269,6 +269,38 @@ export function shouldRequireIssueCommentForWake(
   );
 }
 
+/**
+ * How a run relates to the issue execution lock (`issues.executionRunId`).
+ *
+ * - `held`: the run owns the execution lock of the issue it works on.
+ * - `none`: the run owns no issue execution lock. A company-scope run finds
+ *   issues at run time by scanning the company's task list, and it does not
+ *   hold their locks; it must acquire the lock per issue before it starts
+ *   working on one. A review or recovery-action run works on an issue
+ *   somebody else owns, and does not hold that issue's lock either.
+ */
+export type RunIssueExecutionLock = "held" | "none";
+
+export const RUN_ISSUE_EXECUTION_LOCK_KEY = "issueExecutionLock";
+
+/**
+ * Classify a claimed run's issue execution lock ownership.
+ *
+ * The issue row is the authority: the lock is only stamped when the run is
+ * the issue's assignee and no other run already owns it, so a run that merely
+ * carries an issue id in its context can still own no lock.
+ */
+export function runIssueExecutionLock(input: {
+  issueId: string | null | undefined;
+  executionRunId: string | null | undefined;
+  runId: string;
+}): RunIssueExecutionLock {
+  if (!readNonEmptyString(input.issueId)) return "none";
+  return readNonEmptyString(input.executionRunId) === input.runId
+    ? "held"
+    : "none";
+}
+
 async function listUnresolvedBlockerSummaries(
   dbOrTx: Pick<Db, "select">,
   companyId: string,
@@ -1564,6 +1596,53 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
           ),
         );
     }
+
+    // Record on the claimed run whether it owns an issue execution lock. A
+    // company-scope run has none: it only discovers issues at run time, so the
+    // issue-scoped stamp above never applies to it. Downstream tool authority
+    // reads this marker to require a per-issue lock before such a run works on
+    // an issue it found by itself, instead of racing the issue's assignee run.
+    //
+    // The issue row is the authority: the stamp above only lands when the run
+    // is the issue's assignee and no other run owns the lock, and review or
+    // recovery-action runs never take it. Merge the single key in SQL so a
+    // concurrent wake that coalesces into this running run cannot lose its
+    // comment ids to a whole-snapshot write back.
+    const lockOwnerRunId = claimedIssueId
+      ? await db
+          .select({ executionRunId: issues.executionRunId })
+          .from(issues)
+          .where(
+            and(
+              eq(issues.id, claimedIssueId),
+              eq(issues.companyId, claimed.companyId),
+            ),
+          )
+          .then((rows) => rows[0]?.executionRunId ?? null)
+      : null;
+    const issueExecutionLock = runIssueExecutionLock({
+      issueId: claimedIssueId,
+      executionRunId: lockOwnerRunId,
+      runId: claimed.id,
+    });
+    await db
+      .update(heartbeatRuns)
+      .set({
+        contextSnapshot: sql`(case when jsonb_typeof(${heartbeatRuns.contextSnapshot}) = 'object'
+          then ${heartbeatRuns.contextSnapshot} || ${JSON.stringify({
+            [RUN_ISSUE_EXECUTION_LOCK_KEY]: issueExecutionLock,
+          })}::jsonb
+          else ${JSON.stringify({
+            [RUN_ISSUE_EXECUTION_LOCK_KEY]: issueExecutionLock,
+          })}::jsonb end)`,
+        updatedAt: claimedAt,
+      })
+      .where(
+        and(
+          eq(heartbeatRuns.id, claimed.id),
+          eq(heartbeatRuns.status, "running"),
+        ),
+      );
 
     return claimed;
   }
