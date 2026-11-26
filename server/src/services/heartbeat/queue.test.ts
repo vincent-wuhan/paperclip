@@ -815,4 +815,130 @@ describe.skipIf(!support.supported)("heartbeat queue database wiring", () => {
     expect(deps.treeControlSvc.getActivePauseHoldGate).not.toHaveBeenCalled();
     expect(deps.executeRun).not.toHaveBeenCalled();
   });
+
+  it("holds an unscoped manual wake behind the agent's running run instead of running both", async () => {
+    const f = await fixture("running");
+    const userId = `manual-wake-user-${f.company.id}`;
+    const deps = callbacks(db);
+    deps.getAgent.mockResolvedValue(f.agent);
+    const queue = createHeartbeatQueue(db, deps);
+    const followup = await queue.enqueueWakeup(f.agent.id, {
+      manualUserWake: true,
+      source: "on_demand",
+      triggerDetail: "manual",
+      requestedByActorType: "user",
+      requestedByActorId: userId,
+    });
+    expect(followup).not.toBeNull();
+    expect(followup!.id).not.toBe(f.run.id);
+    expect(followup).toMatchObject({
+      status: "queued",
+      invocationSource: "on_demand",
+      triggerDetail: "manual",
+      responsibleUserId: userId,
+      contextSnapshot: {
+        manualWakeFollowup: true,
+        wakeReason: "manual_followup",
+      },
+    });
+    // The assignment run keeps its own context: the manual wake was never
+    // merged into it.
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id)))[0]
+      .contextSnapshot).toEqual({ issueId: f.issue.id });
+    const [receipt] = await db.select().from(agentWakeupRequests)
+      .where(eq(agentWakeupRequests.id, followup!.wakeupRequestId!));
+    expect(receipt).toMatchObject({
+      status: "queued",
+      source: "on_demand",
+      triggerDetail: "manual",
+      requestedByActorType: "user",
+      requestedByActorId: userId,
+      payload: { manualUserWake: true },
+    });
+    // The queue path immediately tries to start the run (default
+    // maxConcurrentRuns far exceeds one running run); the followup gate must
+    // keep it queued while the in-flight run still executes.
+    expect(deps.executeRun).not.toHaveBeenCalled();
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, followup!.id)))[0].status).toBe("queued");
+
+    // Once the in-flight run settles, the manual followup run can claim.
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() })
+      .where(eq(heartbeatRuns.id, f.run.id));
+    expect(await queue.claimQueuedRun(followup!)).toMatchObject({
+      id: followup!.id,
+      status: "running",
+      responsibleUserId: userId,
+    });
+  });
+
+  it("starts an unscoped manual wake immediately when no in-flight run exists", async () => {
+    const f = await fixture("queued");
+    // Empty the queued assignment run so the agent has no in-flight work.
+    await db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date() })
+      .where(eq(heartbeatRuns.id, f.run.id));
+    const userId = `manual-wake-user-${f.company.id}`;
+    const deps = callbacks(db);
+    deps.getAgent.mockResolvedValue(f.agent);
+    const queue = createHeartbeatQueue(db, deps);
+    const run = await queue.enqueueWakeup(f.agent.id, {
+      manualUserWake: true,
+      source: "on_demand",
+      triggerDetail: "manual",
+      requestedByActorType: "user",
+      requestedByActorId: userId,
+    });
+    expect(run).not.toBeNull();
+    expect(run).toMatchObject({
+      status: "queued",
+      invocationSource: "on_demand",
+      triggerDetail: "manual",
+      responsibleUserId: userId,
+    });
+    expect(run!.contextSnapshot?.manualWakeFollowup).toBeUndefined();
+    expect(run!.contextSnapshot?.wakeReason).toBeUndefined();
+    const [afterStart] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+    expect(afterStart.status).toBe("running");
+  });
+
+  it("does not hold a task-scoped manual wake behind unrelated in-flight runs", async () => {
+    // A manual wake that names its issue keeps its directed behavior: it
+    // queues without the manual-followup marker.
+    const f = await fixture("running");
+    const userId = `manual-wake-user-${f.company.id}`;
+    await db.insert(authUsers).values({ id: userId, name: "Directed manual user", email: `${userId}@queue.test`, createdAt: new Date(), updatedAt: new Date() });
+    const deps = callbacks(db);
+    deps.getAgent.mockResolvedValue(f.agent);
+    deps.instanceSettings.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: false } as Awaited<ReturnType<HeartbeatQueueDependencies["instanceSettings"]["getExperimental"]>>);
+    const admission = createWakeQueue(db, {
+      resolveResponsibleUserId: async () => userId,
+      getRoutineEnv: async () => ({ routineId: null, env: null, responsibleUserId: null }),
+      resolveSessionBeforeForWakeup: async () => null,
+      wakeAdmissionHelpers: { filterZombieCoalesceTarget: deps.filterZombieCoalesceTarget,
+        mergeCoalescedContextSnapshot, shouldDeferFollowupWakeForSameIssue, shouldQueueFollowupForRunningIssueWake },
+      recovery: { escalateStrandedAssignedIssue: async () => undefined, escalateStrandedRecoveryIssueInPlace: async () => undefined },
+    });
+    deps.wakeQueue.createAdmissionTransactionScope.mockImplementation(admission.createAdmissionTransactionScope);
+    deps.wakeQueue.admitWakeBehindIssueExecution.mockImplementation(admission.admitWakeBehindIssueExecution);
+    const queue = createHeartbeatQueue(db, deps);
+    const directed = await queue.enqueueWakeup(f.agent.id, {
+      manualUserWake: true,
+      source: "on_demand",
+      triggerDetail: "manual",
+      payload: { issueId: f.issue.id },
+      contextSnapshot: { issueId: f.issue.id },
+      requestedByActorType: "user",
+      requestedByActorId: userId,
+    });
+    // The issue-scope admission queue already handles a directed manual wake:
+    // while the issue's own run executes, the wake defers behind it instead of
+    // creating a second run. It must not gain the company-scope followup
+    // marker or queue a parallel run.
+    expect(directed).toBeNull();
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.company.id))).every(row =>
+      row.contextSnapshot?.manualWakeFollowup !== true)).toBe(true);
+    const deferred = await db.select().from(agentWakeupRequests)
+      .where(eq(agentWakeupRequests.agentId, f.agent.id));
+    expect(deferred.some(row => row.status === "deferred_issue_execution" &&
+      row.payload?.manualUserWake === true && row.requestedByActorId === userId)).toBe(true);
+  });
 });

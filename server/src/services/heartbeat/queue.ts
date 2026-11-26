@@ -572,6 +572,27 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
     return Number(count ?? 0);
   }
 
+  async function countAgentInFlightRuns(
+    agentId: string,
+    companyId: string,
+    excludeRunId: string,
+  ) {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(heartbeatRuns)
+      .where(
+        and(
+          eq(heartbeatRuns.companyId, companyId),
+          eq(heartbeatRuns.agentId, agentId),
+          inArray(heartbeatRuns.status, [
+            ...EXECUTION_PATH_HEARTBEAT_RUN_STATUSES,
+          ]),
+          ne(heartbeatRuns.id, excludeRunId),
+        ),
+      );
+    return Number(count ?? 0);
+  }
+
   async function withChatControlRecoveryGate(
     run: typeof heartbeatRuns.$inferSelect,
     stage: "claim" | "dispatch",
@@ -967,6 +988,16 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
         ))
         .limit(1);
       if (settlingOwner) return null;
+    }
+    if (
+      context.manualWakeFollowup === true &&
+      (await countAgentInFlightRuns(run.agentId, run.companyId, run.id)) > 0
+    ) {
+      // A queued manual-followup wake is a company-scope manual wake that
+      // arrived while its agent already had an in-flight run. It stays queued
+      // until that run finishes; the executor's finally block and the periodic
+      // queue scan retry this agent once the in-flight run settles.
+      return null;
     }
     if (issueId) {
       const activePauseHold = await treeControlSvc.getActivePauseHoldGate(
@@ -4545,6 +4576,26 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
           (shouldQueueFollowupForRunningWake
             ? null
             : (sameScopeRunningRun ?? null)));
+
+    // An unscoped manual wake (manualUserWake with no task scope) must not
+    // run beside the agent's existing in-flight run: an assignment wake and
+    // a manual wake on the same agent would otherwise dispatch two sessions
+    // and do the work twice. Keep the manual wake's own receipt, execution
+    // identity, invocationSource, and triggerDetail, but hold the queued run
+    // behind the in-flight one exactly like an issue-scope followup wake.
+    const shouldHoldManualWakeBehindInFlightRun =
+      opts.manualUserWake === true &&
+      taskKey === null &&
+      activeRuns.some(
+        (candidate) =>
+          filterZombieCoalesceTarget(candidate, liveRunExecutions) !== null,
+      );
+    if (shouldHoldManualWakeBehindInFlightRun) {
+      enrichedContextSnapshot.manualWakeFollowup = true;
+      if (!readNonEmptyString(enrichedContextSnapshot.wakeReason)) {
+        enrichedContextSnapshot.wakeReason = "manual_followup";
+      }
+    }
 
     // A reviewed chat run attests one conversation, so never fold another
     // conversation's reply into it; that reply queues its own run instead.
